@@ -38,6 +38,10 @@ const MIC_GAIN_BOOST = 1.4;
 const WEBCAM_TARGET_WIDTH = 1280;
 const WEBCAM_TARGET_HEIGHT = 720;
 const WEBCAM_TARGET_FRAME_RATE = 30;
+// Webcam is always ~720p @ 30fps; a screen recording can be 4K. We don't want
+// the webcam's bitrate budget to scale with the screen resolution, so pin it
+// independently. 12 Mbps at 720p30 is well above the quality ceiling.
+const WEBCAM_BITRATE = 12_000_000;
 
 type UseScreenRecorderReturn = {
 	recording: boolean;
@@ -761,7 +765,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			if (webcamStream.current) {
 				webcamRecorder.current = createRecorderHandle(webcamStream.current, {
 					mimeType,
-					videoBitsPerSecond: Math.min(videoBitsPerSecond, BITRATE_BASE),
+					videoBitsPerSecond: WEBCAM_BITRATE,
 				});
 			}
 

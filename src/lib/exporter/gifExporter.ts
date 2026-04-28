@@ -270,7 +270,7 @@ export class GifExporter {
 							this.config.onProgress({
 								currentFrame: frameIndex,
 								totalFrames,
-								percentage: (frameIndex / totalFrames) * 100,
+								percentage: totalFrames > 0 ? (frameIndex / totalFrames) * 100 : 0,
 								estimatedTimeRemaining: 0,
 							});
 						}

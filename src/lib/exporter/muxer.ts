@@ -77,11 +77,17 @@ export class VideoMuxer {
 			throw new Error("Muxer not initialized");
 		}
 
-		await this.output.finalize();
-		const buffer = this.target.buffer;
+		try {
+			await this.output.finalize();
+		} catch (error) {
+			throw new Error(
+				`Muxer finalization failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 
-		if (!buffer) {
-			throw new Error("Failed to finalize output");
+		const buffer = this.target.buffer;
+		if (!buffer || buffer.byteLength === 0) {
+			throw new Error("Muxer produced empty output");
 		}
 
 		return new Blob([buffer], { type: "video/mp4" });

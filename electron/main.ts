@@ -30,6 +30,22 @@ if (process.platform === "darwin") {
 	app.commandLine.appendSwitch("disable-features", "MacCatapLoopbackAudioForScreenShare");
 }
 
+// Enforce single-instance. A second launch focuses the existing window instead
+// of starting a parallel process (which would race on RECORDINGS_DIR writes).
+if (!app.requestSingleInstanceLock()) {
+	app.quit();
+	process.exit(0);
+}
+
+// Log the top-level crash paths so failures leave a trace in console / log files
+// instead of the app silently disappearing.
+process.on("uncaughtException", (error) => {
+	console.error("[main] uncaughtException:", error);
+});
+process.on("unhandledRejection", (reason) => {
+	console.error("[main] unhandledRejection:", reason);
+});
+
 export const RECORDINGS_DIR = path.join(app.getPath("userData"), "recordings");
 
 async function ensureRecordingsDir() {
@@ -92,8 +108,17 @@ function showMainWindow() {
 	createWindow();
 }
 
+function getWindowType(window: BrowserWindow): string | null {
+	try {
+		const url = new URL(window.webContents.getURL());
+		return url.searchParams.get("windowType");
+	} catch {
+		return null;
+	}
+}
+
 function isEditorWindow(window: BrowserWindow) {
-	return window.webContents.getURL().includes("windowType=editor");
+	return getWindowType(window) === "editor";
 }
 
 function sendEditorMenuAction(
@@ -340,6 +365,12 @@ function createCountdownOverlayWindowWrapper() {
 	return countdownOverlayWindow;
 }
 
+// When a second instance tries to launch, focus the existing main window
+// instead of silently ignoring it.
+app.on("second-instance", () => {
+	showMainWindow();
+});
+
 // On macOS, applications and their menu bar stay active until the user quits
 // explicitly with Cmd + Q.
 app.on("window-all-closed", () => {
@@ -354,26 +385,54 @@ app.on("activate", () => {
 			return false;
 		}
 
-		const url = window.webContents.getURL();
-		const isCountdownOverlayWindow = url.includes("windowType=countdown-overlay");
-		return !isCountdownOverlayWindow;
+		return getWindowType(window) !== "countdown-overlay";
 	});
 	if (!hasVisibleWindow) {
 		showMainWindow();
 	}
 });
 
+// Only grant media permissions to our own windows (file:// or the Vite dev server)
+// to stop a compromised renderer that navigated elsewhere from silently claiming
+// camera/mic/screen capture.
+const ALLOWED_MEDIA_PERMISSIONS = new Set([
+	"media",
+	"audioCapture",
+	"microphone",
+	"videoCapture",
+	"camera",
+]);
+
+function isTrustedRendererOrigin(url: string): boolean {
+	try {
+		const parsed = new URL(url);
+		if (parsed.protocol === "file:") return true;
+		if (VITE_DEV_SERVER_URL) {
+			const devUrl = new URL(VITE_DEV_SERVER_URL);
+			if (parsed.origin === devUrl.origin) return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
 // Register all IPC handlers when app is ready
 app.whenReady().then(async () => {
 	// Allow microphone/media permission checks
-	session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
-		const allowed = ["media", "audioCapture", "microphone", "videoCapture", "camera"];
-		return allowed.includes(permission);
+	session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+		if (!ALLOWED_MEDIA_PERMISSIONS.has(permission)) return false;
+		const url = webContents?.getURL() ?? "";
+		return isTrustedRendererOrigin(url);
 	});
 
-	session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-		const allowed = ["media", "audioCapture", "microphone", "videoCapture", "camera"];
-		callback(allowed.includes(permission));
+	session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+		if (!ALLOWED_MEDIA_PERMISSIONS.has(permission)) {
+			callback(false);
+			return;
+		}
+		const url = webContents?.getURL() ?? "";
+		callback(isTrustedRendererOrigin(url));
 	});
 
 	// Request microphone permission from macOS

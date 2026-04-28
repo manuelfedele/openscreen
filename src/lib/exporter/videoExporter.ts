@@ -179,6 +179,10 @@ export class VideoExporter {
 			const frameDuration = 1_000_000 / effectiveFrameRate;
 			let frameIndex = 0;
 			const exportStartedAt = Date.now();
+			// Keyframe every ~2 seconds. Most players and seekers assume GOPs in the
+			// 1-3s range; the prior hardcoded 150-frame interval meant 10s GOPs at
+			// 15fps (unseekable) and 2.5s GOPs at 60fps (fine but inconsistent).
+			const keyFrameInterval = Math.max(1, Math.round(effectiveFrameRate * 2));
 			const maxEncodeQueue =
 				encoderPreference === "prefer-software"
 					? Math.min(this.MAX_ENCODE_QUEUE, 32)
@@ -287,7 +291,9 @@ export class VideoExporter {
 
 						if (this.encoder && this.encoder.state === "configured") {
 							this.encodeQueue++;
-							this.encoder.encode(exportFrame, { keyFrame: frameIndex % 150 === 0 });
+							this.encoder.encode(exportFrame, {
+								keyFrame: frameIndex % keyFrameInterval === 0,
+							});
 						} else {
 							console.warn(
 								`[Frame ${frameIndex}] Encoder not ready! State: ${this.encoder?.state}`,
@@ -304,7 +310,7 @@ export class VideoExporter {
 						this.reportProgress({
 							currentFrame: frameIndex,
 							totalFrames,
-							percentage: (frameIndex / totalFrames) * 100,
+							percentage: totalFrames > 0 ? (frameIndex / totalFrames) * 100 : 0,
 							estimatedTimeRemaining: Math.round(remaining),
 						});
 					} finally {

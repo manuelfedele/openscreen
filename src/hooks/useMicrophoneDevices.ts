@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface MicrophoneDevice {
 	deviceId: string;
@@ -11,6 +11,8 @@ export function useMicrophoneDevices(enabled: boolean = true) {
 	const [selectedDeviceId, setSelectedDeviceId] = useState<string>("default");
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const selectedDeviceIdRef = useRef(selectedDeviceId);
+	selectedDeviceIdRef.current = selectedDeviceId;
 
 	useEffect(() => {
 		if (!enabled) {
@@ -41,7 +43,7 @@ export function useMicrophoneDevices(enabled: boolean = true) {
 
 				if (mounted) {
 					setDevices(audioInputs);
-					if (selectedDeviceId === "default" && audioInputs.length > 0) {
+					if (selectedDeviceIdRef.current === "default" && audioInputs.length > 0) {
 						setSelectedDeviceId(audioInputs[0].deviceId);
 					}
 					setIsLoading(false);
@@ -69,7 +71,7 @@ export function useMicrophoneDevices(enabled: boolean = true) {
 			mounted = false;
 			navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange);
 		};
-	}, [enabled, selectedDeviceId]);
+	}, [enabled]);
 
 	return {
 		devices,

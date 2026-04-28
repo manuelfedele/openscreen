@@ -121,7 +121,6 @@ export function createEditorWindow(): BrowserWindow {
 			additionalArguments: [ASSET_BASE_URL_ARG],
 			nodeIntegration: false,
 			contextIsolation: true,
-			webSecurity: false,
 			backgroundThrottling: false,
 		},
 	});

@@ -36,6 +36,26 @@ function approveFilePath(filePath: string): void {
 	approvedPaths.add(path.resolve(filePath));
 }
 
+/**
+ * Writes data atomically: write to a sibling tmp file, then rename into place.
+ * A mid-write crash leaves the original file intact and the tmp file as debris,
+ * rather than a truncated target.
+ */
+async function writeFileAtomic(targetPath: string, data: Buffer | string): Promise<void> {
+	const tmpPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
+	try {
+		await fs.writeFile(tmpPath, data);
+		await fs.rename(tmpPath, targetPath);
+	} catch (error) {
+		try {
+			await fs.unlink(tmpPath);
+		} catch {
+			// tmp may not exist yet
+		}
+		throw error;
+	}
+}
+
 function getAllowedReadDirs(): string[] {
 	return [RECORDINGS_DIR];
 }
@@ -84,13 +104,24 @@ async function approveReadableVideoPath(
 		}
 	}
 
+	// Resolve symlinks before approving so a link inside an allowed directory
+	// cannot be used to read files outside the trusted boundary.
+	let realPath: string;
 	try {
 		const stats = await fs.stat(normalizedPath);
 		if (!stats.isFile()) {
 			return null;
 		}
+		realPath = await fs.realpath(normalizedPath);
 	} catch {
 		return null;
+	}
+
+	if (trustedDirs) {
+		const withinTrustedReal = trustedDirs.some((dir) => isPathWithinDir(realPath, dir));
+		if (!withinTrustedReal) {
+			return null;
+		}
 	}
 
 	approveFilePath(normalizedPath);
@@ -260,12 +291,12 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 			? payload.createdAt
 			: Date.now();
 	const screenVideoPath = resolveRecordingOutputPath(payload.screen.fileName);
-	await fs.writeFile(screenVideoPath, Buffer.from(payload.screen.videoData));
+	await writeFileAtomic(screenVideoPath, Buffer.from(payload.screen.videoData));
 
 	let webcamVideoPath: string | undefined;
 	if (payload.webcam) {
 		webcamVideoPath = resolveRecordingOutputPath(payload.webcam.fileName);
-		await fs.writeFile(webcamVideoPath, Buffer.from(payload.webcam.videoData));
+		await writeFileAtomic(webcamVideoPath, Buffer.from(payload.webcam.videoData));
 	}
 
 	const session: RecordingSession = webcamVideoPath
@@ -276,10 +307,9 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 
 	const telemetryPath = `${screenVideoPath}.cursor.json`;
 	if (pendingCursorSamples.length > 0) {
-		await fs.writeFile(
+		await writeFileAtomic(
 			telemetryPath,
 			JSON.stringify({ version: CURSOR_TELEMETRY_VERSION, samples: pendingCursorSamples }, null, 2),
-			"utf-8",
 		);
 	}
 	pendingCursorSamples = [];
@@ -288,7 +318,7 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 		RECORDINGS_DIR,
 		`${path.parse(payload.screen.fileName).name}${RECORDING_SESSION_SUFFIX}`,
 	);
-	await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+	await writeFileAtomic(sessionManifestPath, JSON.stringify(session, null, 2));
 
 	return {
 		success: true,
@@ -843,7 +873,7 @@ export function registerIpcHandlers(
 			await fs.mkdir(path.dirname(normalizedPath), { recursive: true });
 			// --- END FIX ---
 
-			await fs.writeFile(normalizedPath, Buffer.from(videoData));
+			await writeFileAtomic(normalizedPath, Buffer.from(videoData));
 
 			return {
 				success: true,
@@ -933,11 +963,7 @@ export function registerIpcHandlers(
 					: null;
 
 				if (trustedExistingProjectPath) {
-					await fs.writeFile(
-						trustedExistingProjectPath,
-						JSON.stringify(projectData, null, 2),
-						"utf-8",
-					);
+					await writeFileAtomic(trustedExistingProjectPath, JSON.stringify(projectData, null, 2));
 					currentProjectPath = trustedExistingProjectPath;
 					return {
 						success: true,
@@ -972,7 +998,7 @@ export function registerIpcHandlers(
 					};
 				}
 
-				await fs.writeFile(result.filePath, JSON.stringify(projectData, null, 2), "utf-8");
+				await writeFileAtomic(result.filePath, JSON.stringify(projectData, null, 2));
 				currentProjectPath = result.filePath;
 
 				return {
@@ -1120,7 +1146,7 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("save-shortcuts", async (_, shortcuts: unknown) => {
 		try {
-			await fs.writeFile(SHORTCUTS_FILE, JSON.stringify(shortcuts, null, 2), "utf-8");
+			await writeFileAtomic(SHORTCUTS_FILE, JSON.stringify(shortcuts, null, 2));
 			return { success: true };
 		} catch (error) {
 			console.error("Failed to save shortcuts:", error);
