@@ -121,6 +121,10 @@ export function createEditorWindow(): BrowserWindow {
 			additionalArguments: [ASSET_BASE_URL_ARG],
 			nodeIntegration: false,
 			contextIsolation: true,
+			// Required so the renderer can load recorded videos via file:// URLs
+			// outside its own origin. A proper fix is a custom protocol handler
+			// that serves only whitelisted paths; until that lands, keep this on.
+			webSecurity: false,
 			backgroundThrottling: false,
 		},
 	});
