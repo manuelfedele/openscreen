@@ -123,10 +123,20 @@ export class VideoExporter {
 			const streamingDecoder = new StreamingVideoDecoder();
 			this.streamingDecoder = streamingDecoder;
 			const videoInfo = await streamingDecoder.loadMetadata(this.config.videoUrl);
+			// Pick a frame rate: explicit caller override, else the detected source
+			// rate, else 60 as a last-resort fallback. videoInfo.frameRate can be
+			// 0, NaN, or Infinity when the container lacks avg_frame_rate metadata;
+			// without this fallback, totalFrames computes to 0 and the export
+			// fails with an empty buffer.
+			const detectedRate = Number.isFinite(videoInfo.frameRate)
+				? Math.round(videoInfo.frameRate)
+				: 0;
 			const effectiveFrameRate =
 				this.config.frameRate > 0
 					? this.config.frameRate
-					: Math.min(Math.round(videoInfo.frameRate), 60);
+					: detectedRate > 0
+						? Math.min(detectedRate, 60)
+						: 60;
 			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
 			if (this.config.webcamVideoUrl) {
 				webcamDecoder = new StreamingVideoDecoder();
