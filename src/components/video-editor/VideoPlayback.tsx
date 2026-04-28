@@ -727,6 +727,16 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			if ("autoUpdate" in source) {
 				(source as { autoUpdate?: boolean }).autoUpdate = true;
 			}
+			// Enable anisotropic filtering so downscaled video (source > preview size)
+			// keeps sharp text and UI edges instead of the LINEAR-filter blur.
+			if ("style" in source && source.style) {
+				const style = source.style as {
+					scaleMode?: string;
+					maxAnisotropy?: number;
+				};
+				style.scaleMode = "linear";
+				style.maxAnisotropy = 16;
+			}
 			const videoTexture = Texture.from(source);
 
 			const videoSprite = new Sprite(videoTexture);

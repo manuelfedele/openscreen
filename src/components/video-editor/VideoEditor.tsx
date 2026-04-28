@@ -1490,11 +1490,11 @@ export default function VideoEditor() {
 						// Adjust bitrate for lower resolutions
 						const totalPixels = exportWidth * exportHeight;
 						if (totalPixels <= 1280 * 720) {
-							bitrate = 10_000_000;
+							bitrate = 15_000_000;
 						} else if (totalPixels <= 1920 * 1080) {
-							bitrate = 20_000_000;
+							bitrate = 40_000_000;
 						} else {
-							bitrate = 30_000_000;
+							bitrate = 60_000_000;
 						}
 					}
 
@@ -1503,7 +1503,7 @@ export default function VideoEditor() {
 						webcamVideoUrl: webcamVideoPath || undefined,
 						width: exportWidth,
 						height: exportHeight,
-						frameRate: 60,
+						frameRate: 0,
 						bitrate,
 						codec: "avc1.640033",
 						wallpaper,

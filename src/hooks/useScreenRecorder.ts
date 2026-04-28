@@ -13,9 +13,9 @@ const QHD_WIDTH = 2560;
 const QHD_HEIGHT = 1440;
 const QHD_PIXELS = QHD_WIDTH * QHD_HEIGHT;
 
-const BITRATE_4K = 45_000_000;
-const BITRATE_QHD = 28_000_000;
-const BITRATE_BASE = 18_000_000;
+const BITRATE_4K = 80_000_000;
+const BITRATE_QHD = 55_000_000;
+const BITRATE_BASE = 40_000_000;
 const HIGH_FRAME_RATE_THRESHOLD = 60;
 const HIGH_FRAME_RATE_BOOST = 1.7;
 
@@ -128,8 +128,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		// when the software encoder can't keep up.
 		const preferred = [
 			"video/webm;codecs=h264",
-			"video/webm;codecs=vp8",
 			"video/webm;codecs=vp9",
+			"video/webm;codecs=vp8",
 			"video/webm;codecs=av1",
 			"video/webm",
 		];

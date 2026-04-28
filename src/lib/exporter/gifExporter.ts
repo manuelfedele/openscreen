@@ -169,7 +169,7 @@ export class GifExporter {
 			const WORKER_COUNT = Math.max(1, Math.min(8, cores - 1));
 			this.gif = new GIF({
 				workers: WORKER_COUNT,
-				quality: 10,
+				quality: 1,
 				width: this.config.width,
 				height: this.config.height,
 				workerScript: GIF_WORKER_URL,

@@ -1,6 +1,7 @@
 export interface ExportConfig {
 	width: number;
 	height: number;
+	/** Pass 0 (or omit) to auto-detect from the source video, capped at 60 fps. */
 	frameRate: number;
 	bitrate: number;
 	codec?: string;

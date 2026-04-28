@@ -223,7 +223,9 @@ export function ExportDialog({
 							</div>
 						</div>
 
-						<div className="grid grid-cols-2 gap-4">
+						<div
+							className={`grid gap-4 ${!isCompiling && !isFinalizing ? "grid-cols-3" : "grid-cols-2"}`}
+						>
 							<div className="bg-white/5 rounded-xl p-3 border border-white/5">
 								<div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
 									{isCompiling || isFinalizing ? t("export.status") : t("export.format")}
@@ -244,6 +246,20 @@ export function ExportDialog({
 									{progress.currentFrame} / {progress.totalFrames}
 								</div>
 							</div>
+							{!isCompiling && !isFinalizing && (
+								<div className="bg-white/5 rounded-xl p-3 border border-white/5">
+									<div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+										ETA
+									</div>
+									<div className="text-slate-200 font-medium text-sm font-mono">
+										{progress.estimatedTimeRemaining > 0
+											? progress.estimatedTimeRemaining >= 60
+												? `${Math.floor(progress.estimatedTimeRemaining / 60)}m ${progress.estimatedTimeRemaining % 60}s`
+												: `${progress.estimatedTimeRemaining}s`
+											: "--"}
+									</div>
+								</div>
+							)}
 						</div>
 
 						{onCancel && (

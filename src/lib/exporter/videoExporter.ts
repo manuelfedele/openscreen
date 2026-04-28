@@ -123,6 +123,10 @@ export class VideoExporter {
 			const streamingDecoder = new StreamingVideoDecoder();
 			this.streamingDecoder = streamingDecoder;
 			const videoInfo = await streamingDecoder.loadMetadata(this.config.videoUrl);
+			const effectiveFrameRate =
+				this.config.frameRate > 0
+					? this.config.frameRate
+					: Math.min(Math.round(videoInfo.frameRate), 60);
 			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
 			if (this.config.webcamVideoUrl) {
 				webcamDecoder = new StreamingVideoDecoder();
@@ -159,7 +163,7 @@ export class VideoExporter {
 			this.renderer = renderer;
 			await renderer.initialize();
 
-			await this.initializeEncoder(encoderPreference);
+			await this.initializeEncoder(encoderPreference, effectiveFrameRate);
 
 			const hasAudio = videoInfo.hasAudio;
 			const muxer = new VideoMuxer(this.config, hasAudio);
@@ -167,13 +171,14 @@ export class VideoExporter {
 			await muxer.initialize();
 
 			const { totalFrames } = streamingDecoder.getExportMetrics(
-				this.config.frameRate,
+				effectiveFrameRate,
 				this.config.trimRegions,
 				this.config.speedRegions,
 			);
 
-			const frameDuration = 1_000_000 / this.config.frameRate;
+			const frameDuration = 1_000_000 / effectiveFrameRate;
 			let frameIndex = 0;
+			const exportStartedAt = Date.now();
 			const maxEncodeQueue =
 				encoderPreference === "prefer-software"
 					? Math.min(this.MAX_ENCODE_QUEUE, 32)
@@ -186,7 +191,7 @@ export class VideoExporter {
 							const queue = webcamFrameQueue;
 							return webcamDecoder
 								.decodeAll(
-									this.config.frameRate,
+									effectiveFrameRate,
 									this.config.trimRegions,
 									this.config.speedRegions,
 									async (webcamFrame) => {
@@ -215,7 +220,7 @@ export class VideoExporter {
 					: null;
 
 			await streamingDecoder.decodeAll(
-				this.config.frameRate,
+				effectiveFrameRate,
 				this.config.trimRegions,
 				this.config.speedRegions,
 				async (videoFrame, _exportTimestampUs, sourceTimestampMs) => {
@@ -292,11 +297,15 @@ export class VideoExporter {
 						exportFrame.close();
 						frameIndex++;
 
+						const elapsedSec = (Date.now() - exportStartedAt) / 1000;
+						const framesPerSec = frameIndex / elapsedSec;
+						const remaining = framesPerSec > 0 ? (totalFrames - frameIndex) / framesPerSec : 0;
+
 						this.reportProgress({
 							currentFrame: frameIndex,
 							totalFrames,
 							percentage: (frameIndex / totalFrames) * 100,
-							estimatedTimeRemaining: 0,
+							estimatedTimeRemaining: Math.round(remaining),
 						});
 					} finally {
 						videoFrame.close();
@@ -370,7 +379,10 @@ export class VideoExporter {
 		}
 	}
 
-	private async initializeEncoder(hardwareAcceleration: HardwareAcceleration): Promise<void> {
+	private async initializeEncoder(
+		hardwareAcceleration: HardwareAcceleration,
+		frameRate: number,
+	): Promise<void> {
 		this.encodeQueue = 0;
 		this.muxingPromises = [];
 		this.chunkCount = 0;
@@ -445,7 +457,7 @@ export class VideoExporter {
 			width: this.config.width,
 			height: this.config.height,
 			bitrate: this.config.bitrate,
-			framerate: this.config.frameRate,
+			framerate: frameRate,
 			latencyMode: "quality",
 			bitrateMode: "variable",
 			hardwareAcceleration,
